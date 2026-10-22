@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web İçerik Kelime Frekans Analizörü</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen py-10 px-4">
+    <div class="max-w-2xl mx-auto bg-white p-6 sm:p-8 rounded-2xl shadow-sm border border-slate-200">
+        
+        <!-- Başlık -->
+        <header class="mb-6">
+            <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Web İçerik Kelime Frekans Analizörü</h1>
+            <p class="text-sm text-slate-500 mt-1">Belirttiğiniz alan adının iç sayfalarını gezer, görünür metinleri ayıklar ve en sık geçen 10 kelimeyi listeler.</p>
+        </header>
+
+        <!-- Form Alanı -->
+        <form id="analizForm" class="space-y-4">
+            <div>
+                <label for="url" class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Web Sitesi URL'si</label>
+                <input type="text" id="url" name="url" required placeholder="https://ornek.com veya ornek.com"
+                    class="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm">
+            </div>
+
+            <div class="flex items-center gap-4">
+                <div class="w-1/2">
+                    <label for="max_sayfa" class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Maksimum Sayfa</label>
+                    <input type="number" id="max_sayfa" name="max_sayfa" value="15" min="1" max="50"
+                        class="w-full px-3.5 py-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm">
+                </div>
+                <div class="w-1/2 flex items-end">
+                    <button type="submit" id="btnGonder"
+                        class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-lg text-sm transition-colors flex items-center justify-center gap-2">
+                        <span>Taramayı Başlat</span>
+                    </button>
+                </div>
+            </div>
+        </form>
+
+        <!-- Durum Bildirimleri & Yükleniyor -->
+        <div id="loading" class="hidden mt-6 text-center py-6">
+            <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-indigo-500 border-t-transparent"></div>
+            <p class="text-sm text-slate-600 mt-2">Sayfalar taranıyor ve metinler analiz ediliyor...</p>
+        </div>
+
+        <div id="hataKutusu" class="hidden mt-6 p-4 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm"></div>
+
+        <!-- Sonuç Alanı -->
+        <div id="sonucAlani" class="hidden mt-8 pt-6 border-t border-slate-100">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-semibold text-slate-900">En Çok Kullanılan 10 Kelime</h2>
+                <span id="ozetBilgi" class="text-xs bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full"></span>
+            </div>
+
+            <div id="kelimeListesi" class="space-y-3">
+                <!-- Javascript ile dinamik eklenecek -->
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const form = document.getElementById('analizForm');
+        const loading = document.getElementById('loading');
+        const hataKutusu = document.getElementById('hataKutusu');
+        const sonucAlani = document.getElementById('sonucAlani');
+        const kelimeListesi = document.getElementById('kelimeListesi');
+        const ozetBilgi = document.getElementById('ozetBilgi');
+        const btnGonder = document.getElementById('btnGonder');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            hataKutusu.classList.add('hidden');
+            sonucAlani.classList.add('hidden');
+            loading.classList.remove('hidden');
+            btnGonder.disabled = true;
+            btnGonder.classList.add('opacity-50', 'cursor-not-allowed');
+
+            const payload = {
+                url: document.getElementById('url').value,
+                max_sayfa: parseInt(document.getElementById('max_sayfa').value, 10)
+            };
+
+            try {
+                const response = await fetch('/analiz-et', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+
+                if (!response.ok || !data.success) {
+                    throw new Error(data.error || 'Tarama sırasında bir sorun oluştu.');
+                }
+
+                ozetBilgi.textContent = `${data.domain} • ${data.taranan_sayfa} sayfa incelendi`;
+                kelimeListesi.innerHTML = '';
+
+                if (data.kelimeler.length === 0) {
+                    kelimeListesi.innerHTML = '<p class="text-sm text-slate-500">Yeterli kelime verisi bulunamadı.</p>';
+                } else {
+                    const maxFrekans = data.kelimeler[0].adet;
+
+                    data.kelimeler.forEach((item, index) => {
+                        const yuzde = Math.round((item.adet / maxFrekans) * 100);
+                        const row = document.createElement('div');
+                        row.className = "flex items-center gap-3 text-sm";
+                        row.innerHTML = `
+                            <span class="w-6 text-slate-400 font-mono text-xs">${index + 1}.</span>
+                            <span class="w-28 font-medium text-slate-700 truncate" title="${item.kelime}">${item.kelime}</span>
+                            <div class="flex-1 bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                                <div class="bg-indigo-600 h-2.5 rounded-full transition-all duration-500" style="width: ${yuzde}%"></div>
+                            </div>
+                            <span class="w-12 text-right font-mono text-xs text-slate-500">${item.adet}</span>
+                        `;
+                        kelimeListesi.appendChild(row);
+                    });
+                }
+
+                sonucAlani.classList.remove('hidden');
+
+            } catch (err) {
+                hataKutusu.textContent = err.message;
+                hataKutusu.classList.remove('hidden');
+            } finally {
+                loading.classList.add('hidden');
+                btnGonder.disabled = false;
+                btnGonder.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        });
+    </script>
+</body>
+</html>
